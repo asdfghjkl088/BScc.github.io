@@ -1,2 +1,0 @@
-# BScc.github.io
-.
