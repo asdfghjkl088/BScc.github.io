@@ -1,0 +1,16 @@
+{
+  "forum": {
+    "name": "BScc工作室加密论坛",
+    "description": "端到端加密的安全讨论平台",
+    "version": "1.0.0",
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "repository": "BScc-Forum-Data",
+    "owner": "ASDFGHJKL088"
+  },
+  "settings": {
+    "max_file_size": 10485760,
+    "max_image_size": 5242880,
+    "allowed_extensions": [".jpg", ".png", ".pdf", ".txt", ".zip"],
+    "encryption_enabled": true
+  }
+}
