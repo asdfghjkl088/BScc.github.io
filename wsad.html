@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>全球服务器监控系统</title>
+    
+    <!-- 引入Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- 引入Leaflet地图库 -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- 引入xterm.js终端 -->
+    <link rel="stylesheet" href="https://unpkg.com/xterm@5.0.0/css/xterm.css">
+    <script src="https://unpkg.com/xterm@5.0.0/lib/xterm.js"></script>
+    <script src="https://unpkg.com/xterm-addon-fit@0.7.0/lib/xterm-addon-fit.js"></script>
+    
+    <!-- 引入Font Awesome图标 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif; 
+        }
+        
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #3b82f6;
+            --dark-bg: #0f172a;
+            --darker-bg: #020617;
+            --card-bg: #1e293b;
+            --text-color: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+        }
+        
+        body { 
+            background: var(--dark-bg); 
+            color: var(--text-color); 
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* 登录面板 */
+        .login-panel { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(11, 18, 34, 0.95); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            z-index: 9999; 
+            backdrop-filter: blur(10px);
+        }
+        
+        .login-box { 
+            background: var(--card-bg); 
+            padding: 2.5rem; 
+            border-radius: 1.5rem; 
+            border: 1px solid var(--border-color); 
+            width: 90%; 
+            max-width: 400px; 
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .login-box h2 { 
+            text-align: center; 
+            margin-bottom: 2rem; 
+            background: linear-gradient(90deg, var(--primary-color), var(--success)); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+            font-size: 1.8rem;
+        }
+        
+        .login-input { 
+            width: 100%; 
+            background: var(--darker-bg); 
+            border: 1px solid var(--border-color); 
+            border-radius: 0.75rem; 
+            padding: 1rem; 
+            margin-bottom: 1.25rem; 
+            color: var(--text-color); 
+            font-size: 1rem; 
+            transition: all 0.3s ease;
+        }
+        
+        .login-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        
+        .btn { 
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); 
+            border: none; 
+            border-radius: 0.75rem; 
+            padding: 1rem 1.5rem; 
+            color: white; 
+            cursor: pointer; 
+            font-weight: 600; 
+            transition: all 0.3s ease; 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 0.5rem; 
+        }
+        
+        .btn:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2); 
+        }
+        
+        .btn:active { 
+            transform: translateY(0); 
+        }
+        
+        /* 主容器 */
+        .container { 
+            width: 100%; 
+            padding: 1rem; 
+            display: grid; 
+            gap: 1.25rem; 
+            grid-template-columns: 1fr; 
+        }
+        
+        /* 头部 */
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 1.25rem; 
+            background: var(--card-bg); 
+            border-radius: 1rem; 
+            border: 1px solid var(--border-color); 
+            flex-wrap: wrap; 
+            gap: 1rem; 
+        }
+        
+        .header-left { 
+            display: flex; 
+            align-items: center; 
+            gap: 1rem; 
+        }
+        
+        .header h1 { 
+            font-size: 1.5rem; 
+            background: linear-gradient(90deg, var(--primary-color), var(--info)); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+        }
+        
+        .status { 
+            padding: 0.375rem 0.75rem; 
+            border-radius: 2rem; 
+            font-size: 0.875rem; 
+            font-weight: 600; 
+        }
+        
+        .status-online { 
+            background: var(--success); 
+            color: white; 
+        }
+        
+        .header-right { 
+            display: flex; 
+            align-items: center; 
+            gap: 1rem; 
+            flex-wrap: wrap; 
+        }
+        
+        /* 卡片样式 */
+        .card { 
+            background: var(--card-bg); 
+            border-radius: 1rem; 
+            padding: 1.5rem; 
+            border: 1px solid var(--border-color); 
+            position: relative; 
+            overflow: hidden; 
+        }
+        
+        .card h2 { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 1.25rem; 
+            font-size: 1.25rem; 
+        }
+        
+        .card h2 span { 
+            font-size: 0.875rem; 
+            color: var(--text-secondary); 
+        }
+        
+        /* 图表容器 */
+        .chart-container { 
+            width: 100%; 
+            height: 200px; 
+            margin: 1rem 0; 
+            position: relative; 
+        }
+        
+        /* 地图容器 */
+        .map-container { 
+            width: 100%; 
+            height: 400px; 
+            border-radius: 1rem; 
+            overflow: hidden; 
+            border: 1px solid var(--border-color); 
+        }
+        
+        #worldMap { 
+            width: 100%; 
+            height: 100%; 
+            background: var(--darker-bg); 
+        }
+        
+        /* 地图控制面板 */
+        .map-controls { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 0.75rem; 
+            margin: 1rem 0; 
+            padding: 1rem; 
+            background: var(--darker-bg); 
+            border-radius: 0.75rem; 
+        }
+        
+        .control-item { 
+            display: flex; 
+            align-items: center; 
+            gap: 0.5rem; 
+            padding: 0.5rem 0.75rem; 
+            background: var(--card-bg); 
+            border-radius: 0.5rem; 
+            font-size: 0.875rem; 
+        }
+        
+        .color-dot { 
+            width: 12px; 
+            height: 12px; 
+            border-radius: 50%; 
+        }
+        
+        .color-green { background: var(--success); }
+        .color-yellow { background: var(--warning); }
+        .color-orange { background: #fb923c; }
+        .color-red { background: var(--danger); }
+        .color-black { background: var(--border-color); }
+        
+        /* 服务器网格 */
+        .server-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
+            gap: 1rem; 
+            margin-top: 1rem; 
+        }
+        
+        .server-card { 
+            background: var(--darker-bg); 
+            border-radius: 0.75rem; 
+            padding: 1rem; 
+            display: flex; 
+            align-items: center; 
+            gap: 1rem; 
+            cursor: pointer; 
+            transition: all 0.3s ease; 
+            border: 1px solid transparent; 
+        }
+        
+        .server-card:hover { 
+            transform: translateY(-2px); 
+            border-color: var(--primary-color); 
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.1); 
+        }
+        
+        .server-status { 
+            width: 12px; 
+            height: 12px; 
+            border-radius: 50%; 
+        }
+        
+        .server-info { 
+            flex: 1; 
+        }
+        
+        .server-name { 
+            font-weight: 600; 
+            margin-bottom: 0.25rem; 
+        }
+        
+        .server-region { 
+            font-size: 0.875rem; 
+            color: var(--text-secondary); 
+        }
+        
+        .server-latency { 
+            font-weight: 600; 
+            font-size: 1.125rem; 
+        }
+        
+        /* 端口管理 */
+        .port-grid { 
+            display: grid; 
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 0.75rem; 
+            margin-top: 1rem; 
+        }
+        
+        .port-item { 
+            background: var(--success); 
+            padding: 0.75rem; 
+            border-radius: 0.5rem; 
+            text-align: center; 
+            font-size: 0.875rem; 
+            color: white; 
+        }
+        
+        /* 标签页样式 */
+        .tabs { 
+            display: flex; 
+            border-bottom: 1px solid var(--border-color); 
+            margin-bottom: 1rem; 
+        }
+        
+        .tab { 
+            background: none; 
+            border: none; 
+            color: var(--text-secondary); 
+            padding: 0.75rem 1.5rem; 
+            cursor: pointer; 
+            font-size: 0.875rem; 
+            border-bottom: 3px solid transparent; 
+        }
+        
+        .tab.active { 
+            color: var(--primary-color); 
+            border-bottom-color: var(--primary-color); 
+        }
+        
+        .tab-content { 
+            display: none; 
+        }
+        
+        .tab-content.active { 
+            display: block; 
+        }
+        
+        /* 终端容器 */
+        .terminal-container { 
+            width: 100%; 
+            height: 300px; 
+            background: #000; 
+            border-radius: 0.5rem; 
+            overflow: hidden; 
+        }
+        
+        .xterm { 
+            padding: 0.5rem; 
+        }
+        
+        /* 日志容器 */
+        .log-container { 
+            height: 300px; 
+            overflow-y: auto; 
+            background: var(--darker-bg); 
+            border-radius: 0.5rem; 
+            padding: 1rem; 
+            font-family: 'Consolas', 'Monaco', monospace; 
+            font-size: 0.875rem; 
+        }
+        
+        .log-entry { 
+            margin-bottom: 0.5rem; 
+            padding: 0.5rem; 
+            border-radius: 0.25rem; 
+            background: rgba(255, 255, 255, 0.05); 
+        }
+        
+        .log-time { 
+            color: var(--text-secondary); 
+            font-size: 0.75rem; 
+        }
+        
+        .log-info { color: var(--info); }
+        .log-warning { color: var(--warning); }
+        .log-error { color: var(--danger); }
+        .log-success { color: var(--success); }
+        
+        /* 设备信息表格 */
+        .device-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+        }
+        
+        .device-table th, 
+        .device-table td { 
+            padding: 0.75rem; 
+            text-align: left; 
+            border-bottom: 1px solid var(--border-color); 
+        }
+        
+        .device-table th { 
+            color: var(--text-secondary); 
+            font-weight: 600; 
+        }
+        
+        /* 响应式设计 */
+        @media (min-width: 768px) {
+            .container { 
+                grid-template-columns: repeat(2, 1fr); 
+                padding: 1.5rem; 
+            }
+            
+            .header { 
+                grid-column: 1 / -1; 
+            }
+            
+            .card:nth-child(2) { 
+                grid-column: span 2; 
+            }
+            
+            .card:nth-child(6) { 
+                grid-column: span 2; 
+            }
+            
+            .card:nth-child(7) { 
+                grid-column: span 2; 
+            }
+            
+            .map-container { 
+                height: 500px; 
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .container { 
+                grid-template-columns: repeat(4, 1fr); 
+                max-width: 1400px; 
+                margin: 0 auto; 
+            }
+            
+            .card:nth-child(2) { 
+                grid-column: span 2; 
+            }
+            
+            .card:nth-child(3) { 
+                grid-column: span 2; 
+            }
+            
+            .card:nth-child(6) { 
+                grid-column: span 4; 
+            }
+            
+            .card:nth-child(7) { 
+                grid-column: span 4; 
+            }
+        }
+        
+        /* 滚动条样式 */
+        ::-webkit-scrollbar { 
+            width: 8px; 
+            height: 8px; 
+        }
+        
+        ::-webkit-scrollbar-track { 
+            background: var(--darker-bg); 
+            border-radius: 4px; 
+        }
+        
+        ::-webkit-scrollbar-thumb { 
+            background: var(--border-color); 
+            border-radius: 4px; 
+        }
+        
+        ::-webkit-scrollbar-thumb:hover { 
+            background: var(--text-secondary); 
+        }
+        
+        /* 加载动画 */
+        .loading { 
+            display: inline-block; 
+            width: 1rem; 
+            height: 1rem; 
+            border: 2px solid rgba(255, 255, 255, 0.3); 
+            border-radius: 50%; 
+            border-top-color: white; 
+            animation: spin 1s ease-in-out infinite; 
+        }
+        
+        @keyframes spin { 
+            to { transform: rotate(360deg); } 
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 登录面板 -->
+    <div class="login-panel" id="loginPanel">
+        <div class="login-box">
+            <h2><i class="fas fa-globe-americas"></i> 全球服务器监控</h2>
+            <input type="text" id="username" class="login-input" placeholder="用户名" value="admin">
+            <input type="password" id="password" class="login-input" placeholder="密码" value="if0_41833836_Opay0CuVyeQThk">
+            <button class="btn" id="loginBtn" style="width: 100%;">
+                <span id="loginText">登录系统</span>
+                <span id="loginLoading" class="loading" style="display: none;"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 主界面 -->
+    <div class="container" id="mainPanel" style="display: none;">
+        <!-- 头部 -->
+        <div class="header">
+            <div class="header-left">
+                <h1><i class="fas fa-server"></i> 全球服务器监控系统</h1>
+                <span class="status status-online" id="serverStatus">在线</span>
+            </div>
+            <div class="header-right">
+                <div id="currentTime">--:--:--</div>
+                <button class="btn" id="refreshBtn">
+                    <i class="fas fa-sync-alt"></i> 刷新
+                </button>
+                <button class="btn" id="focusChinaBtn">
+                    <i class="fas fa-map-marker-alt"></i> 中国
+                </button>
+                <button class="btn" id="focusGlobalBtn">
+                    <i class="fas fa-globe"></i> 全球
+                </button>
+            </div>
+        </div>
+
+        <!-- CPU监控 -->
+        <div class="card">
+            <h2>
+                <span><i class="fas fa-microchip"></i> CPU 使用率</span>
+                <span id="cpuValDetail">0%</span>
+            </h2>
+            <div class="chart-container">
+                <canvas id="cpuChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 内存监控 -->
+        <div class="card">
+            <h2>
+                <span><i class="fas fa-memory"></i> 内存使用率</span>
+                <span id="memValDetail">0/0 GB</span>
+            </h2>
+            <div class="chart-container">
+                <canvas id="memChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 网络监控 -->
+        <div class="card">
+            <h2><i class="fas fa-network-wired"></i> 网络流量</h2>
+            <div class="chart-container">
+                <canvas id="netChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 磁盘监控 -->
+        <div class="card">
+            <h2>
+                <span><i class="fas fa-hdd"></i> 磁盘使用</span>
+                <span id="diskValDetail">0%</span>
+            </h2>
+            <div class="chart-container">
+                <canvas id="diskChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 全球网络延迟地图 -->
+        <div class="card">
+            <h2><i class="fas fa-globe-americas"></i> 全球延迟监控</h2>
+            <div class="map-controls">
+                <div class="control-item">
+                    <div class="color-dot color-green"></div>
+                    <span>良好 (&lt;50ms)</span>
+                </div>
+                <div class="control-item">
+                    <div class="color-dot color-yellow"></div>
+                    <span>一般 (50-100ms)</span>
+                </div>
+                <div class="control-item">
+                    <div class="color-dot color-orange"></div>
+                    <span>较慢 (100-200ms)</span>
+                </div>
+                <div class="control-item">
+                    <div class="color-dot color-red"></div>
+                    <span>很慢 (200-500ms)</span>
+                </div>
+                <div class="control-item">
+                    <div class="color-dot color-black"></div>
+                    <span>无法访问 (&gt;500ms)</span>
+                </div>
+            </div>
+            <div class="map-container">
+                <div id="worldMap"></div>
+            </div>
+        </div>
+
+        <!-- 服务器状态列表 -->
+        <div class="card">
+            <h2><i class="fas fa-server"></i> 服务器状态</h2>
+            <div class="server-grid" id="serverGrid">
+                <!-- 服务器卡片会动态生成 -->
+            </div>
+        </div>
+
+        <!-- 端口管理 -->
+        <div class="card">
+            <h2><i class="fas fa-plug"></i> 开放端口</h2>
+            <div class="port-grid">
+                <div class="port-item">SSH (22)</div>
+                <div class="port-item">HTTP (80)</div>
+                <div class="port-item">HTTPS (443)</div>
+                <div class="port-item">HTTP备用 (8080)</div>
+                <div class="port-item">HTTPS备用 (8443)</div>
+                <div class="port-item">MySQL (3306)</div>
+                <div class="port-item">PostgreSQL (5432)</div>
+                <div class="port-item">Redis (6379)</div>
+            </div>
+        </div>
+
+        <!-- 系统终端 -->
+        <div class="card" style="grid-column: span 4;">
+            <h2><i class="fas fa-terminal"></i> 系统终端</h2>
+            <div class="tabs" id="terminalTabs">
+                <button class="tab active" data-terminal="local">本地终端</button>
+                <button class="tab" data-terminal="remote">远程SSH</button>
+                <button class="tab" data-terminal="docker">Docker容器</button>
+            </div>
+            <div class="terminal-container" id="terminalContainer">
+                <!-- xterm终端会在这里初始化 -->
+            </div>
+        </div>
+
+        <!-- 系统日志 -->
+        <div class="card" style="grid-column: span 4;">
+            <h2><i class="fas fa-scroll"></i> 系统日志</h2>
+            <div class="tabs" id="logTabs">
+                <button class="tab active" data-log="system">系统日志</button>
+                <button class="tab" data-log="security">安全日志</button>
+                <button class="tab" data-log="application">应用日志</button>
+                <button class="tab" data-log="network">网络日志</button>
+            </div>
+            <div class="log-container" id="logContainer">
+                <!-- 日志会动态生成 -->
+            </div>
+        </div>
+
+        <!-- 设备信息 -->
+        <div class="card" style="grid-column: span 4;">
+            <h2><i class="fas fa-desktop"></i> 设备信息</h2>
+            <table class="device-table">
+                <thead>
+                    <tr>
+                        <th>类别</th>
+                        <th>参数</th>
+                        <th>值</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody id="deviceInfo">
+                    <!-- 设备信息会动态生成 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let map = null;
+        let markers = [];
+        let charts = {};
+        let monitoringInterval = null;
+        let terminal = null;
+        let logs = [];
+        let deviceInfo = {};
+        
+        // 服务器配置
+        const SERVER_CONFIG = {
+            username: "admin",
+            password: "if0_41833836_Opay0CuVyeQThk"
+        };
+        
+        // 全球服务器数据
+        const serverData = [
+            // 中国地区
+            { id: 1, name: "北京", region: "中国", country: "CN", lat: 39.9042, lng: 116.4074, latency: 12, ports: [22, 80, 443, 8080] },
+            { id: 2, name: "上海", region: "中国", country: "CN", lat: 31.2304, lng: 121.4737, latency: 15, ports: [22, 80, 443, 8080] },
+            { id: 3, name: "广州", region: "中国", country: "CN", lat: 23.1291, lng: 113.2644, latency: 18, ports: [22, 80, 443] },
+            { id: 4, name: "深圳", region: "中国", country: "CN", lat: 22.5431, lng: 114.0579, latency: 20, ports: [22, 80, 443, 8080] },
+            { id: 5, name: "杭州", region: "中国", country: "CN", lat: 30.2741, lng: 120.1551, latency: 25, ports: [22, 80, 443] },
+            
+            // 美国地区
+            { id: 6, name: "洛杉矶", region: "美国", country: "US", lat: 34.0522, lng: -118.2437, latency: 150, ports: [22, 80, 443] },
+            { id: 7, name: "纽约", region: "美国", country: "US", lat: 40.7128, lng: -74.0060, latency: 180, ports: [22, 80, 443] },
+            { id: 8, name: "芝加哥", region: "美国", country: "US", lat: 41.8781, lng: -87.6298, latency: 200, ports: [22, 80] },
+            
+            // 欧洲地区
+            { id: 9, name: "伦敦", region: "英国", country: "GB", lat: 51.5074, lng: -0.1278, latency: 120, ports: [22, 80, 443] },
+            { id: 10, name: "巴黎", region: "法国", country: "FR", lat: 48.8566, lng: 2.3522, latency: 130, ports: [22, 80, 443] },
+            { id: 11, name: "法兰克福", region: "德国", country: "DE", lat: 50.1109, lng: 8.6821, latency: 125, ports: [22, 80, 443, 8080] },
+            
+            // 亚洲其他地区
+            { id: 12, name: "东京", region: "日本", country: "JP", lat: 35.6762, lng: 139.6503, latency: 60, ports: [22, 80, 443] },
+            { id: 13, name: "首尔", region: "韩国", country: "KR", lat: 37.5665, lng: 126.9780, latency: 55, ports: [22, 80, 443, 8080] },
+            { id: 14, name: "新加坡", region: "新加坡", country: "SG", lat: 1.3521, lng: 103.8198, latency: 45, ports: [22, 80, 443] },
+            
+            // 大洋洲
+            { id: 15, name: "悉尼", region: "澳大利亚", country: "AU", lat: -33.8688, lng: 151.2093, latency: 140, ports: [22, 80, 443] },
+            { id: 16, name: "奥克兰", region: "新西兰", country: "NZ", lat: -36.8485, lng: 174.7633, latency: 155, ports: [22, 80] },
+            { id: 17, name: "夏威夷", region: "美国", country: "US", lat: 21.3069, lng: -157.8583, latency: 180, ports: [22, 80] },
+            
+            // 南美洲
+            { id: 18, name: "圣保罗", region: "巴西", country: "BR", lat: -23.5505, lng: -46.6333, latency: 280, ports: [22, 80] },
+            
+            // 非洲
+            { id: 19, name: "开罗", region: "埃及", country: "EG", lat: 30.0444, lng: 31.2357, latency: 180, ports: [22, 80] },
+            { id: 20, name: "约翰内斯堡", region: "南非", country: "ZA", lat: -26.2041, lng: 28.0473, latency: 250, ports: [22, 80] }
+        ];
+        
+        // 初始化函数
+        document.addEventListener('DOMContentLoaded', function() {
+            // 绑定登录按钮事件
+            document.getElementById('loginBtn').addEventListener('click', doLogin);
+            
+            // 绑定回车键登录
+            document.querySelectorAll('.login-input').forEach(input => {
+                input.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') doLogin();
+                });
+            });
+            
+            // 初始化时间显示
+            updateTime();
+            setInterval(updateTime, 1000);
+            
+            // 绑定其他按钮事件
+            bindButtons();
+        });
+        
+        // 绑定所有按钮事件
+        function bindButtons() {
+            // 刷新按钮
+            document.getElementById('refreshBtn')?.addEventListener('click', refreshAll);
+            
+            // 聚焦中国按钮
+            document.getElementById('focusChinaBtn')?.addEventListener('click', focusOnChina);
+            
+            // 聚焦全球按钮
+            document.getElementById('focusGlobalBtn')?.addEventListener('click', focusOnGlobal);
+            
+            // 终端标签页切换
+            document.querySelectorAll('#terminalTabs .tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    document.querySelectorAll('#terminalTabs .tab').forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    switchTerminal(this.getAttribute('data-terminal'));
+                });
+            });
+            
+            // 日志标签页切换
+            document.querySelectorAll('#logTabs .tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    document.querySelectorAll('#logTabs .tab').forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    switchLog(this.getAttribute('data-log'));
+                });
+            });
+        }
+        
+        // 登录功能
+        async function doLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+            const loginText = document.getElementById('loginText');
+            const loginLoading = document.getElementById('loginLoading');
+            
+            // 显示加载状态
+            loginText.textContent = '登录中...';
+            loginLoading.style.display = 'inline-block';
+            loginBtn.disabled = true;
+            
+            // 模拟登录延迟
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            if (username === SERVER_CONFIG.username && password === SERVER_CONFIG.password) {
+                // 登录成功
+                document.getElementById('loginPanel').style.display = 'none';
+                document.getElementById('mainPanel').style.display = 'grid';
+                
+                // 初始化系统
+                initCharts();
+                initWorldMap();
+                updateServerGrid();
+                startMonitoring();
+                initTerminal();
+                initLogs();
+                initDeviceInfo();
+                
+                // 添加登录成功消息
+                addLog('登录成功！欢迎使用全球服务器监控系统', 'success');
+            } else {
+                // 登录失败
+                alert('账号或密码错误');
+                
+                // 重置登录按钮
+                loginText.textContent = '登录系统';
+                loginLoading.style.display = 'none';
+                loginBtn.disabled = false;
+            }
+        }
+        
+        // 更新时间显示
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('zh-CN', { 
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            const dateString = now.toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+            
+            const timeElement = document.getElementById('currentTime');
+            if (timeElement) {
+                timeElement.innerHTML = `<i class="fas fa-clock"></i> ${dateString} ${timeString}`;
+            }
+        }
+        
+        // 初始化图表
+        function initCharts() {
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: true }
+                },
+                scales: {
+                    x: { 
+                        display: false,
+                        grid: { display: false }
+                    },
+                    y: { 
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: 'rgba(255, 255, 255, 0.6)' }
+                    }
+                },
+                elements: {
+                    point: { radius: 0 },
+                    line: { tension: 0.4 }
+                }
+            };
+            
+            // CPU图表
+            const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+            charts.cpu = new Chart(cpuCtx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 60}, (_, i) => i + 's'),
+                    datasets: [{
+                        data: Array.from({length: 60}, () => Math.random() * 30 + 20),
+                        borderColor: '#38bdf8',
+                        backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                        borderWidth: 2,
+                        fill: true
+                    }]
+                },
+                options: chartOptions
+            });
+            
+            // 内存图表
+            const memCtx = document.getElementById('memChart').getContext('2d');
+            charts.memory = new Chart(memCtx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 60}, (_, i) => i + 's'),
+                    datasets: [{
+                        data: Array.from({length: 60}, () => Math.random() * 20 + 40),
+                        borderColor: '#4ade80',
+                        backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                        borderWidth: 2,
+                        fill: true
+                    }]
+                },
+                options: chartOptions
+            });
+            
+            // 网络图表
+            const netCtx = document.getElementById('netChart').getContext('2d');
+            charts.network = new Chart(netCtx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 60}, (_, i) => i + 's'),
+                    datasets: [
+                        {
+                            label: '下载',
+                            data: Array.from({length: 60}, () => Math.random() * 30 + 10),
+                            borderColor: '#fbbf24',
+                            borderWidth: 2
+                        },
+                        {
+                            label: '上传',
+                            data: Array.from({length: 60}, () => Math.random() * 15 + 5),
+                            borderColor: '#fb7185',
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    ...chartOptions,
+                    plugins: { 
+                        legend: { 
+                            display: true, 
+                            labels: { color: 'rgba(255, 255, 255, 0.6)' } 
+                        } 
+                    }
+                }
+            });
+            
+            // 磁盘图表
+            const diskCtx = document.getElementById('diskChart').getContext('2d');
+            charts.disk = new Chart(diskCtx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 60}, (_, i) => i + 's'),
+                    datasets: [{
+                        data: Array.from({length: 60}, () => Math.random() * 10 + 60),
+                        borderColor: '#a78bfa',
+                        backgroundColor: 'rgba(167, 139, 250, 0.1)',
+                        borderWidth: 2,
+                        fill: true
+                    }]
+                },
+                options: chartOptions
+            });
+        }
+        
+        // 初始化世界地图
+        function initWorldMap() {
+            if (!document.getElementById('worldMap')) return;
+            
+            // 创建地图实例
+            map = L.map('worldMap', {
+                center: [20, 0],
+                zoom: 2,
+                minZoom: 1,
+                maxZoom: 8,
+                dragging: true,
+                touchZoom: true,
+                scrollWheelZoom: true
+            });
+            
+            // 添加深色地图图层
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© OpenStreetMap contributors, © CARTO',
+                maxZoom: 8
+            }).addTo(map);
+            
+            // 添加服务器标记
+            serverData.forEach(server => {
+                const color = getColorByLatency(server.latency);
+                const marker = L.marker([server.lat, server.lng], {
+                    icon: L.divIcon({
+                        className: 'custom-marker',
+                        html: `
+                            <div style="
+                                width: 20px;
+                                height: 20px;
+                                background: ${color};
+                                border-radius: 50%;
+                                border: 2px solid white;
+                                box-shadow: 0 0 10px rgba(0,0,0,0.3);
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 10px;
+                                color: white;
+                                font-weight: bold;
+                            ">
+                                ${Math.round(server.latency)}
+                            </div>
+                        `,
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    })
+                }).addTo(map);
+                
+                // 绑定点击事件
+                marker.on('click', function() {
+                    showServerInfo(server);
+                });
+                
+                markers.push({ marker, server });
+            });
+        }
+        
+        // 根据延迟获取颜色
+        function getColorByLatency(latency) {
+            if (latency < 50) return '#10b981';     // 绿色
+            if (latency < 100) return '#f59e0b';    // 黄色
+            if (latency < 200) return '#fb923c';    // 橙色
+            if (latency < 500) return '#ef4444';    // 红色
+            return '#374151';                       // 黑色
+        }
+        
+        // 显示服务器信息
+        function showServerInfo(server) {
+            alert(`
+                ${server.name} - ${server.region}
+                延迟: ${server.latency}ms
+                国家: ${server.country}
+                端口: ${server.ports.join(', ')}
+            `);
+        }
+        
+        // 更新服务器网格
+        function updateServerGrid() {
+            const grid = document.getElementById('serverGrid');
+            if (!grid) return;
+            
+            grid.innerHTML = serverData.map(server => `
+                <div class="server-card" onclick="showServerInfo(${JSON.stringify(server).replace(/"/g, '&quot;')})">
+                    <div class="server-status" style="background: ${getColorByLatency(server.latency)}"></div>
+                    <div class="server-info">
+                        <div class="server-name">${server.name}</div>
+                        <div class="server-region">${server.region}</div>
+                    </div>
+                    <div class="server-latency" style="color: ${getColorByLatency(server.latency)}">
+                        ${server.latency}ms
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // 聚焦到中国
+        function focusOnChina() {
+            if (map) {
+                map.setView([35, 105], 4);
+            }
+        }
+        
+        // 聚焦到全球视图
+        function focusOnGlobal() {
+            if (map) {
+                map.setView([20, 0], 2);
+            }
+        }
+        
+        // 刷新所有数据
+        function refreshAll() {
+            // 重新加载地图
+            if (map) {
+                map.invalidateSize();
+            }
+            
+            // 随机更新服务器延迟
+            serverData.forEach(server => {
+                const baseLatency = server.latency;
+                const variation = Math.random() * 30 - 15;
+                server.latency = Math.max(1, Math.min(500, baseLatency + variation));
+            });
+            
+            // 更新显示
+            updateServerGrid();
+            
+            // 显示刷新完成
+            const btn = document.getElementById('refreshBtn');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> 已刷新';
+            btn.disabled = true;
+            
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }, 1000);
+            
+            // 添加刷新日志
+            addLog('系统数据已刷新', 'info');
+        }
+        
+        // 初始化终端
+        function initTerminal() {
+            terminal = new Terminal({
+                cursorBlink: true,
+                theme: {
+                    background: '#000000',
+                    foreground: '#f0f0f0',
+                    cursor: '#ffffff',
+                    selection: 'rgba(255, 255, 255, 0.3)',
+                },
+                fontSize: 14,
+                fontFamily: 'Consolas, "Courier New", monospace',
+            });
+            
+            const fitAddon = new FitAddon.FitAddon();
+            terminal.loadAddon(fitAddon);
+            
+            terminal.open(document.getElementById('terminalContainer'));
+            fitAddon.fit();
+            
+            // 初始欢迎信息
+            terminal.writeln('\x1b[1;32m全球服务器监控系统终端\x1b[0m');
+            terminal.writeln('输入 "help" 查看可用命令');
+            terminal.writeln('');
+            
+            // 模拟命令处理
+            terminal.onData(data => {
+                if (data === '\r') { // 回车键
+                    terminal.write('\r\n$ ');
+                } else if (data === '\x7f') { // 退格键
+                    terminal.write('\b \b');
+                } else {
+                    terminal.write(data);
+                }
+            });
+        }
+        
+        // 切换终端
+        function switchTerminal(type) {
+            if (!terminal) return;
+            
+            terminal.clear();
+            
+            switch(type) {
+                case 'local':
+                    terminal.writeln('\x1b[1;32m本地终端\x1b[0m - 连接到本地服务器');
+                    terminal.writeln('输入 "help" 查看可用命令');
+                    break;
+                case 'remote':
+                    terminal.writeln('\x1b[1;32m远程SSH终端\x1b[0m - 通过SSH连接到远程服务器');
+                    terminal.writeln('输入 "ssh user@host" 连接到远程服务器');
+                    break;
+                case 'docker':
+                    terminal.writeln('\x1b[1;32mDocker容器终端\x1b[0m - 连接到Docker容器');
+                    terminal.writeln('输入 "docker exec -it container_name bash" 进入容器');
+                    break;
+            }
+            
+            terminal.writeln('');
+        }
+        
+        // 初始化日志
+        function initLogs() {
+            // 添加一些初始日志
+            addLog('系统启动完成', 'info');
+            addLog('监控服务已启动', 'success');
+            addLog('数据库连接成功', 'info');
+            addLog('网络服务初始化', 'info');
+            addLog('用户登录成功', 'success');
+        }
+        
+        // 添加日志
+        function addLog(message, type = 'info') {
+            const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+            const logEntry = {
+                time,
+                message,
+                type
+            };
+            
+            logs.push(logEntry);
+            
+            // 只保留最近100条日志
+            if (logs.length > 100) {
+                logs.shift();
+            }
+            
+            // 更新显示
+            updateLogDisplay();
+        }
+        
+        // 更新日志显示
+        function updateLogDisplay() {
+            const container = document.getElementById('logContainer');
+            if (!container) return;
+            
+            const activeTab = document.querySelector('#logTabs .tab.active');
+            if (!activeTab) return;
+            
+            const type = activeTab.getAttribute('data-log');
+            
+            // 根据类型过滤日志
+            let filteredLogs = logs;
+            if (type === 'system') {
+                filteredLogs = logs;
+            } else if (type === 'security') {
+                filteredLogs = logs.filter(log => log.type === 'error' || log.message.includes('安全'));
+            } else if (type === 'application') {
+                filteredLogs = logs.filter(log => log.message.includes('应用') || log.message.includes('服务'));
+            } else if (type === 'network') {
+                filteredLogs = logs.filter(log => log.message.includes('网络') || log.message.includes('连接'));
+            }
+            
+            // 显示日志
+            container.innerHTML = filteredLogs.map(log => `
+                <div class="log-entry">
+                    <div class="log-time">[${log.time}]</div>
+                    <div class="log-${log.type}">${log.message}</div>
+                </div>
+            `).join('');
+            
+            // 滚动到底部
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        // 切换日志类型
+        function switchLog(type) {
+            updateLogDisplay();
+        }
+        
+        // 初始化设备信息
+        function initDeviceInfo() {
+            // 收集设备信息
+            deviceInfo = {
+                browser: {
+                    name: navigator.userAgent.match(/(firefox|msie|chrome|safari|opera)/i)?.[0] || '未知',
+                    version: navigator.userAgent.match(/(firefox|msie|chrome|safari|opera)[\/\s](\d+)/i)?.[2] || '未知',
+                    language: navigator.language,
+                    platform: navigator.platform,
+                    online: navigator.onLine
+                },
+                screen: {
+                    width: screen.width,
+                    height: screen.height,
+                    colorDepth: screen.colorDepth + '位',
+                    pixelRatio: window.devicePixelRatio
+                },
+                cpu: {
+                    cores: navigator.hardwareConcurrency || '未知',
+                    architecture: '未知'
+                },
+                memory: {
+                    total: performance.memory ? Math.round(performance.memory.totalJSHeapSize / 1024 / 1024) + 'MB' : '未知',
+                    used: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1024 / 1024) + 'MB' : '未知',
+                    limit: performance.memory ? Math.round(performance.memory.jsHeapSizeLimit / 1024 / 1024) + 'MB' : '未知'
+                },
+                network: {
+                    type: navigator.connection ? navigator.connection.effectiveType : '未知',
+                    downlink: navigator.connection ? navigator.connection.downlink + 'Mbps' : '未知',
+                    rtt: navigator.connection ? navigator.connection.rtt + 'ms' : '未知'
+                },
+                timezone: {
+                    name: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    offset: new Date().getTimezoneOffset() / -60
+                }
+            };
+            
+            // 更新设备信息显示
+            updateDeviceInfo();
+        }
+        
+        // 更新设备信息显示
+        function updateDeviceInfo() {
+            const tbody = document.getElementById('deviceInfo');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            
+            // 浏览器信息
+            addDeviceInfoRow(tbody, '浏览器', '名称', deviceInfo.browser.name);
+            addDeviceInfoRow(tbody, '浏览器', '版本', deviceInfo.browser.version);
+            addDeviceInfoRow(tbody, '浏览器', '语言', deviceInfo.browser.language);
+            addDeviceInfoRow(tbody, '浏览器', '平台', deviceInfo.browser.platform);
+            addDeviceInfoRow(tbody, '浏览器', '在线状态', deviceInfo.browser.online ? '在线' : '离线');
+            
+            // 屏幕信息
+            addDeviceInfoRow(tbody, '屏幕', '分辨率', `${deviceInfo.screen.width}×${deviceInfo.screen.height}`);
+            addDeviceInfoRow(tbody, '屏幕', '颜色深度', deviceInfo.screen.colorDepth);
+            addDeviceInfoRow(tbody, '屏幕', '像素比', deviceInfo.screen.pixelRatio);
+            
+            // CPU信息
+            addDeviceInfoRow(tbody, 'CPU', '核心数', deviceInfo.cpu.cores);
+            addDeviceInfoRow(tbody, 'CPU', '架构', deviceInfo.cpu.architecture);
+            
+            // 内存信息
+            addDeviceInfoRow(tbody, '内存', '总内存', deviceInfo.memory.total);
+            addDeviceInfoRow(tbody, '内存', '已用内存', deviceInfo.memory.used);
+            addDeviceInfoRow(tbody, '内存', '内存限制', deviceInfo.memory.limit);
+            
+            // 网络信息
+            addDeviceInfoRow(tbody, '网络', '连接类型', deviceInfo.network.type);
+            addDeviceInfoRow(tbody, '网络', '下载速度', deviceInfo.network.downlink);
+            addDeviceInfoRow(tbody, '网络', '往返时间', deviceInfo.network.rtt);
+            
+            // 时区信息
+            addDeviceInfoRow(tbody, '时区', '时区', deviceInfo.timezone.name);
+            addDeviceInfoRow(tbody, '时区', '偏移', `UTC${deviceInfo.timezone.offset >= 0 ? '+' : ''}${deviceInfo.timezone.offset}`);
+        }
+        
+        // 添加设备信息行
+        function addDeviceInfoRow(tbody, category, param, value) {
+            const row = document.createElement('tr');
+            
+            row.innerHTML = `
+                <td>${category}</td>
+                <td>${param}</td>
+                <td>${value}</td>
+                <td>
+                    <span class="status status-online">正常</span>
+                </td>
+            `;
+            
+            tbody.appendChild(row);
+        }
+        
+        // 启动监控
+        function startMonitoring() {
+            if (monitoringInterval) clearInterval(monitoringInterval);
+            
+            monitoringInterval = setInterval(() => {
+                // 更新CPU数据
+                if (charts.cpu) {
+                    const newData = charts.cpu.data.datasets[0].data.slice(1);
+                    newData.push(Math.random() * 30 + 20);
+                    charts.cpu.data.datasets[0].data = newData;
+                    charts.cpu.update('none');
+                    
+                    // 更新显示
+                    document.getElementById('cpuValDetail').textContent = 
+                        `${Math.round(newData[newData.length - 1])}%`;
+                }
+                
+                // 更新内存数据
+                if (charts.memory) {
+                    const newData = charts.memory.data.datasets[0].data.slice(1);
+                    newData.push(Math.random() * 20 + 40);
+                    charts.memory.data.datasets[0].data = newData;
+                    charts.memory.update('none');
+                    
+                    // 更新显示
+                    const used = Math.round(newData[newData.length - 1] * 16 / 100);
+                    document.getElementById('memValDetail').textContent = 
+                        `${used}/16 GB`;
+                }
+                
+                // 更新网络数据
+                if (charts.network) {
+                    const newDownData = charts.network.data.datasets[0].data.slice(1);
+                    const newUpData = charts.network.data.datasets[1].data.slice(1);
+                    
+                    newDownData.push(Math.random() * 30 + 10);
+                    newUpData.push(Math.random() * 15 + 5);
+                    
+                    charts.network.data.datasets[0].data = newDownData;
+                    charts.network.data.datasets[1].data = newUpData;
+                    charts.network.update('none');
+                }
+                
+                // 更新磁盘数据
+                if (charts.disk) {
+                    const newData = charts.disk.data.datasets[0].data.slice(1);
+                    newData.push(Math.random() * 10 + 60);
+                    charts.disk.data.datasets[0].data = newData;
+                    charts.disk.update('none');
+                    
+                    // 更新显示
+                    document.getElementById('diskValDetail').textContent = 
+                        `${Math.round(newData[newData.length - 1])}%`;
+                }
+                
+                // 随机更新一些服务器的延迟
+                serverData.forEach(server => {
+                    if (Math.random() < 0.1) { // 10%的几率更新延迟
+                        const change = Math.random() * 20 - 10;
+                        server.latency = Math.max(1, Math.min(500, server.latency + change));
+                    }
+                });
+                
+                // 每分钟更新一次显示
+                if (Math.random() < 0.02) {
+                    updateServerGrid();
+                }
+                
+                // 随机添加日志
+                if (Math.random() < 0.1) {
+                    const logTypes = ['info', 'warning', 'error', 'success'];
+                    const logMessages = [
+                        '监控数据更新完成',
+                        '网络连接状态良好',
+                        'CPU使用率正常',
+                        '内存使用率正常',
+                        '磁盘I/O正常',
+                        '网络流量监控中',
+                        '服务器状态检查完成',
+                        '安全扫描进行中'
+                    ];
+                    
+                    const type = logTypes[Math.floor(Math.random() * logTypes.length)];
+                    const message = logMessages[Math.floor(Math.random() * logMessages.length)];
+                    
+                    addLog(message, type);
+                }
+                
+            }, 1000);
+        }
+        
+        // 窗口大小变化时重新调整地图
+        window.addEventListener('resize', function() {
+            if (map) {
+                setTimeout(() => {
+                    map.invalidateSize();
+                }, 100);
+            }
+        });
+    </script>
+</body>
+</html>

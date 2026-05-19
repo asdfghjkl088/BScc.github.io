@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>反馈与举报 - BSCC工作室</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;font-family:"Microsoft YaHei",sans-serif;}
+        :root{
+            --primary:#0047AB;
+            --text-color:#333;
+            --card-bg:#fff;
+            --page-bg:#f0f0f0;
+            --input-bg:#fff;
+            --border:#ccc;
+        }
+        [data-theme="dark"]{
+            --primary:#2378dd;
+            --text-color:#eee;
+            --card-bg:#2b2b2b;
+            --page-bg:#1e1e1e;
+            --input-bg:#3a3a3a;
+            --border:#444;
+        }
+        body{
+            background:var(--page-bg);
+            color:var(--text-color);
+            padding:2rem 3%;
+            line-height:1.8;
+            transition:0.4s;
+        }
+        .back-btn{
+            display:inline-block;
+            color:var(--primary);
+            text-decoration:none;
+            margin-bottom:2rem;
+        }
+        .form-box{
+            max-width:700px;
+            margin:0 auto;
+            background:var(--card-bg);
+            padding:2rem;
+            border-radius:10px;
+        }
+        h2{
+            color:var(--primary);
+            text-align:center;
+            margin-bottom:1.5rem;
+        }
+        .form-item{margin-bottom:1.2rem;}
+        label{display:block;margin-bottom:0.5rem;}
+        input, select, textarea{
+            width:100%;
+            padding:0.8rem;
+            border:1px solid var(--border);
+            border-radius:6px;
+            background:var(--input-bg);
+            color:var(--text-color);
+            font-size:1rem;
+        }
+        textarea{min-height:140px;resize:vertical;}
+        .submit-btn{
+            width:100%;
+            padding:0.9rem;
+            background:var(--primary);
+            color:#fff;
+            border:none;
+            border-radius:6px;
+            font-size:1rem;
+            cursor:pointer;
+        }
+        .submit-btn:disabled{
+            background:#aaa;
+            cursor:not-allowed;
+        }
+        .file-upload{
+            border:1px dashed var(--border);
+            padding:1rem;
+            text-align:center;
+            border-radius:6px;
+            cursor:pointer;
+            margin-top:0.5rem;
+        }
+        .file-upload:hover{
+            border-color:var(--primary);
+        }
+        .file-list{
+            margin-top:0.5rem;
+            font-size:0.9rem;
+            color:#666;
+        }
+        .file-list span{
+            display:inline-block;
+            background:#eee;
+            padding:0.2rem 0.5rem;
+            border-radius:4px;
+            margin-right:0.5rem;
+            margin-bottom:0.5rem;
+        }
+        .status{
+            margin-top:1rem;
+            padding:0.8rem;
+            border-radius:6px;
+            text-align:center;
+            display:none;
+        }
+        .status.success{
+            background:#d4edda;
+            color:#155724;
+            border:1px solid #c3e6cb;
+        }
+        .status.error{
+            background:#f8d7da;
+            color:#721c24;
+            border:1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+<p><a href="index.html" class="back-btn">← 返回官网首页</a></p>
+<div class="form-box">
+<h2>反馈与举报提交</h2>
+<form id="feedForm">
+<div class="form-item"><label><label>你的联系邮箱                            没有电子邮箱的。客户端，没办法。</label></label> <input type="email" id="userMail" placeholder="请填写你的邮箱" required="" /></div>
+<div class="form-item"><label>反馈/举报类型</label><select id="feedType">
+<option value="产品相关疑问咨询">产品相关疑问咨询</option>
+<option value="工作人员言行违规/辱骂行为">工作人员言行违规/辱骂行为</option>
+<option value="其他用户违规售卖/违规上架物品">其他用户违规售卖/违规上架物品</option>
+<option value="投诉起诉工作人员">投诉起诉工作人员</option>
+<option value="其他举报与反馈内容">其他举报与反馈内容</option>
+<option value="网站bug">网站Bug</option>
+</select></div>
+<div class="form-item"><label>详细描述内容</label> <textarea id="feedContent" placeholder="请详细填写事情经过、相关描述..." required=""></textarea></div>
+<div class="form-item"><label>上传问题图片（可选）</label>
+<div class="file-upload" onclick="document.getElementById('fileInput').click()">点击或拖拽文件到此处上传图片</div>
+<input type="file" id="fileInput" accept="image/*" multiple="multiple" style="display: none;" onchange="handleFileSelect(event)" />
+<div class="file-list" id="fileList"></div>
+</div>
+<div class="status" id="status"></div>
+<button type="button" class="submit-btn" onclick="sendMail()" id="submitBtn">提交并发送</button></form></div>
+<p>
+<script>
+        // 主题同步
+        const html = document.documentElement;
+        const theme = localStorage.getItem('bscc-theme') || 'light';
+        html.setAttribute('data-theme', theme);
+
+        // 目标邮箱（可同时发给多个）
+        const TO_EMAILS = ["asdfghjkl088769@outlook.com", "3988950698@qq.com"];
+        let selectedFiles = [];
+
+        // 文件选择
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            for(let f of files) {
+                if(f.type.startsWith("image/")) selectedFiles.push(f);
+            }
+            updateFileList();
+            e.target.value = "";
+        }
+
+        // 更新文件列表
+        function updateFileList() {
+            const el = document.getElementById("fileList");
+            el.innerHTML = "";
+            selectedFiles.forEach((f,i)=>{
+                let s = document.createElement("span");
+                s.innerHTML = `${f.name} <b onclick="removeFile(${i})" style="color:red;cursor:pointer">×</b>`;
+                el.appendChild(s);
+            });
+        }
+
+        // 删除文件
+        function removeFile(i) {
+            selectedFiles.splice(i,1);
+            updateFileList();
+        }
+
+        // 转base64
+        function toBase64(file) {
+            return new Promise((res,rej)=>{
+                let r = new FileReader();
+                r.readAsDataURL(file);
+                r.onload = ()=>res(r.result);
+                r.onerror = rej;
+            });
+        }
+
+        // 发送邮件（免费开源 直接发送）
+        async function sendMail() {
+            const userMail = document.getElementById("userMail").value.trim();
+            const type = document.getElementById("feedType").value;
+            const content = document.getElementById("feedContent").value.trim();
+            const btn = document.getElementById("submitBtn");
+            const status = document.getElementById("status");
+
+            if(!userMail || !content) {
+                showStatus("请填写完整信息！", "error");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = "发送中...";
+
+            try {
+                let sub = `【BSCC反馈】${type}`;
+                let body = `
+联系邮箱：${userMail}
+反馈类型：${type}
+提交时间：${new Date().toLocaleString()}
+内容：
+${content}
+`;
+
+                let mailto = `mailto:${TO_EMAILS.join(",")}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
+
+                // 有图片则提示打开邮件客户端发送
+                if(selectedFiles.length > 0) {
+                    showStatus("内容已生成！请在邮件客户端添加图片发送即可", "success");
+                    setTimeout(()=>{
+                        window.location.href = mailto;
+                    },1000);
+                } else {
+                    window.location.href = mailto;
+                    showStatus("邮件已打开，点击发送即可完成反馈！", "success");
+                }
+
+                document.getElementById("feedForm").reset();
+                selectedFiles = [];
+                updateFileList();
+            }catch(e){
+                showStatus("发送失败："+e.message, "error");
+            }finally{
+                btn.disabled = false;
+                btn.textContent = "提交并发送";
+            }
+        }
+
+        function showStatus(msg, type) {
+            const s = document.getElementById("status");
+            s.textContent = msg;
+            s.className = `status ${type}`;
+            s.style.display = "block";
+            setTimeout(()=>s.style.display="none", 3000);
+        }
+
+        // 拖拽
+        const area = document.querySelector(".file-upload");
+        area.addEventListener("dragover", e=>e.preventDefault());
+        area.addEventListener("drop", e=>{
+            e.preventDefault();
+            document.getElementById("fileInput").files = e.dataTransfer.files;
+            handleFileSelect({target:document.getElementById("fileInput")});
+        });
+    </script>
+</p>
+</body>
+</html>
